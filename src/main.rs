@@ -9,21 +9,22 @@ fn main() {
     let template = vec![
         "$go(paths, paths);",
         "$for(paths, path{/Orders}, m_o):",
-        "# $get(path);\n",
+        "# $get(path);",
         "",
         "$for(m_o, method{!parameters}, o):",
-        "## $get(method);\n",
+        "## $get(method);",
         "",
-        "## 描述\n",
+        "## 描述",
         "",
-        "$get(o.summary);\n",
+        "$get(o.summary);",
         "",
-        "$tryget(o.description);\n",
+        "$tryget(o.description);",
         "$;",
         "$;",
     ];
 
     let otds = otd::otd::Otd::parse(&template);
+    println!("{:?}", otds);
 
     let mut stack = otd::stack::Stack::new();
     stack.push_ref(openapi);

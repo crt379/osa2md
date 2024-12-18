@@ -11,7 +11,10 @@ pub struct Otd {
     cond: Vec<Option<Vec<String>>>,
     ncond: Vec<Option<Vec<String>>>,
     spac: Option<Vec<Otd>>,
-    debug_info: (usize, usize, usize, usize),
+    // start_row, start_col, end_row, end_col
+    row_col: (usize, usize, usize, usize),
+    // 是否是一行
+    is_line: bool,
 }
 
 impl Otd {
@@ -22,7 +25,8 @@ impl Otd {
             cond: Vec::new(),
             ncond: Vec::new(),
             spac: None,
-            debug_info: (0, 0, 0, 0),
+            row_col: (0, 0, 0, 0),
+            is_line: false,
         }
     }
 
@@ -32,16 +36,16 @@ impl Otd {
         for (ri, row) in rows.iter().enumerate() {
             if row.is_empty() {
                 // 空行，需要添加换行符
-                otd_state = otd_state.push(&mut otds, '\n', ri, 0);
+                otd_state = otd_state.push(&mut otds, '\n', ri, 0, true);
                 continue;
             }
 
             if otd_state.is_undef() && !otd_state.is_empty() && !rows[ri - 1].is_empty() {
-                otd_state = otd_state.push(&mut otds, '\n', ri - 1, rows[ri - 1].len());
+                otd_state = otd_state.push(&mut otds, '\n', ri - 1, rows[ri - 1].len(), false);
             }
 
             for (ci, c) in row.chars().enumerate() {
-                otd_state = otd_state.push(&mut otds, c, ri, ci);
+                otd_state = otd_state.push(&mut otds, c, ri, ci, ci == (row.len() - 1));
             }
         }
 
@@ -63,42 +67,39 @@ impl Otd {
         }
     }
 
-    #[inline(always)]
-    fn _panic(&self, msg: impl std::fmt::Display) -> ! {
-        panic!("{}, {:?}", msg, self);
-    }
-
     fn _go(&self, stack: &mut Stack) {
-        if self.args.is_empty() {
-            self._panic("error: args is empty");
-        }
+        assert!(!self.args.is_empty(), "error: args is empty, {:?}", self);
 
-        if self.args.len() != 2 {
-            self._panic(format!(
-                "error: there are {} parameters, but 2 are required",
-                self.args.len()
-            ));
-        }
+        assert!(
+            self.args.len() == 2,
+            "error: there are {} parameters, but 2 are required, {:?}",
+            self.args.len(),
+            self
+        );
 
         let path = &self.args[0];
         let name = &self.args[1];
         if let Some(val) = stack.get(path) {
             stack.push(HashMap::from([(name.to_string(), val.clone())]));
+            if self.is_line {
+                print!("\n");
+            }
             return;
         }
 
         if let Some(val) = stack.ref_object_get(path) {
             stack.push(HashMap::from([(name.to_string(), val.clone())]));
+            if self.is_line {
+                print!("\n");
+            }
             return;
         }
 
-        self._panic(format!("error: not found {}", path));
+        panic!("error: not found {}, {:?}", path, self);
     }
 
     fn _get(&self, stack: &mut Stack, is_try: bool) {
-        if self.args.is_empty() {
-            self._panic("error: args is empty");
-        }
+        assert!(!self.args.is_empty(), "error: args is empty, {:?}", self);
 
         let name = &self.args[0];
         if let Some(val) = stack.get(name) {
@@ -115,17 +116,17 @@ impl Otd {
             return;
         }
 
-        self._panic(format!("error: not found {}", name));
+        panic!("error: not found {}, {:?}", name, self);
     }
 
     fn _for(&self, stack: &mut Stack) {
-        if self.args.is_empty() {
-            self._panic("error: args is empty");
-        }
+        assert!(!self.args.is_empty(), "error: args is empty, {:?}", self);
 
-        if self.args.len() < 2 {
-            self._panic("error: fewer than 2 parameters");
-        }
+        assert!(
+            self.args.len() >= 2,
+            "error: fewer than 2 parameters, {:?}",
+            self
+        );
 
         let name = &self.args[1];
         let source = &self.args[0];
@@ -135,7 +136,7 @@ impl Otd {
                 if let Some(val) = stack.ref_object_get(source) {
                     val
                 } else {
-                    self._panic(format!("error: not found {}", name))
+                    panic!("error: not found {}, {:?}", name, self);
                 }
             }
         };
@@ -221,12 +222,12 @@ impl OtdState {
                 let mut otd = Otd::new();
                 otd.args.push(s);
                 otd
-            },
-            _ => panic!("error: cannot convert to Otd"),
+            }
+            _ => panic!("error: cannot convert to otd"),
         }
     }
 
-    fn push(self, otds: &mut Vec<Otd>, c: char, row: usize, col: usize) -> Self {
+    fn push(self, otds: &mut Vec<Otd>, c: char, row: usize, col: usize, c_is_end: bool) -> Self {
         match self {
             Self::Undef(mut s) => {
                 if c == '$' {
@@ -237,7 +238,7 @@ impl OtdState {
                     }
 
                     let mut otd = Otd::new();
-                    (otd.debug_info.0, otd.debug_info.1) = (row, col);
+                    (otd.row_col.0, otd.row_col.1) = (row, col);
                     return Self::Func(otd);
                 }
 
@@ -290,7 +291,11 @@ impl OtdState {
                 }
 
                 if c == ';' {
-                    (otd.debug_info.2, otd.debug_info.3) = (row, col);
+                    (otd.row_col.2, otd.row_col.3) = (row, col);
+                    if otd.row_col.0 == otd.row_col.2 && otd.row_col.1 == 0 && c_is_end {
+                        otd.is_line = true;
+                    }
+
                     otds.push(otd);
                     return Self::Undef(String::new());
                 }
@@ -368,10 +373,10 @@ impl OtdState {
                 Self::NCond(otd)
             }
             Self::Block(mut otd, sub_state) => {
-                let sub_state = sub_state.push(otd.spac.as_mut().unwrap(), c, row, col);
+                let sub_state = sub_state.push(otd.spac.as_mut().unwrap(), c, row, col, c_is_end);
                 match sub_state {
                     OtdState::BlockEnd => {
-                        (otd.debug_info.2, otd.debug_info.3) = (row, col);
+                        (otd.row_col.2, otd.row_col.3) = (row, col);
                         otds.push(otd);
                         Self::Undef(String::new())
                     }
