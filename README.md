@@ -20,6 +20,8 @@ go(path, name): 进入某个 object, path 为路径，name 为后续这个使用
 
 get(name): 获取参数, name 为参数名称, 例如：get(paths);
 
+tryget(name): 和get函数一样, 没有对应值时不抛错;
+
 for(source, name, ...)：循环某个 object, source 为对象名称，name 为后续使用这个对象的没一项的名称, 例如：for(paths, path), for 需要 ：跟着后续操作或命令;
 
 
