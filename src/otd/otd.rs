@@ -34,6 +34,10 @@ impl Otd {
         let mut otds = Vec::new();
         let mut otd_state = OtdState::new();
         for (ri, row) in rows.iter().enumerate() {
+            // if otd_state.is_undef() && !otd_state.is_empty() {
+            //     otd_state = otd_state.push(&mut otds, '\n', ri - 1, rows[ri - 1].len(), false);
+            // }
+
             if row.is_empty() {
                 // 空行，需要添加换行符
                 otd_state = otd_state.push(&mut otds, '\n', ri, 0, true);
@@ -58,13 +62,17 @@ impl Otd {
 
     pub fn run(&self, stack: &mut Stack) {
         match self.func.as_str() {
-            "" => print!("{}", self.args[0].as_str()),
+            "" => self._echo(stack),
             "go" => self._go(stack),
             "get" => self._get(stack, false),
             "tryget" => self._get(stack, true),
             "for" => self._for(stack),
             _ => panic!("error: unknown func {}", self.func),
         }
+    }
+
+    fn _echo(&self, _stack: &mut Stack) {
+        print!("{}", self.args[0].as_str());
     }
 
     fn _go(&self, stack: &mut Stack) {
@@ -81,17 +89,11 @@ impl Otd {
         let name = &self.args[1];
         if let Some(val) = stack.get(path) {
             stack.push(HashMap::from([(name.to_string(), val.clone())]));
-            if self.is_line {
-                print!("\n");
-            }
             return;
         }
 
         if let Some(val) = stack.ref_object_get(path) {
             stack.push(HashMap::from([(name.to_string(), val.clone())]));
-            if self.is_line {
-                print!("\n");
-            }
             return;
         }
 
@@ -104,11 +106,17 @@ impl Otd {
         let name = &self.args[0];
         if let Some(val) = stack.get(name) {
             print!("{}", val.to_string());
+            if self.is_line {
+                print!("\n");
+            }
             return;
         }
 
         if let Some(val) = stack.ref_object_get(name) {
             print!("{}", val.to_string());
+            if self.is_line {
+                print!("\n");
+            }
             return;
         }
 
@@ -189,8 +197,9 @@ impl Otd {
     }
 }
 
+#[derive(Debug)]
 enum OtdState {
-    Undef(String),
+    Undef(String, (usize, usize)),
     Func(Otd),
     Args(Otd),
     FuncNext(Otd),
@@ -202,23 +211,27 @@ enum OtdState {
 
 impl OtdState {
     fn new() -> Self {
-        OtdState::Undef(String::new())
+        OtdState::Undef(String::new(), (0, 0))
     }
 
     fn is_undef(&self) -> bool {
-        matches!(*self, Self::Undef(_))
+        match self {
+            Self::Undef(_, _) => true,
+            Self::Block(_, ss) => ss.is_undef(),
+            _ => false,
+        }
     }
 
     fn is_empty(&self) -> bool {
         match self {
-            Self::Undef(s) => s.is_empty(),
+            Self::Undef(s, _) => s.is_empty(),
             _ => false,
         }
     }
 
     fn undef2otd(self) -> Otd {
         match self {
-            Self::Undef(s) => {
+            Self::Undef(s, _) => {
                 let mut otd = Otd::new();
                 otd.args.push(s);
                 otd
@@ -229,11 +242,18 @@ impl OtdState {
 
     fn push(self, otds: &mut Vec<Otd>, c: char, row: usize, col: usize, c_is_end: bool) -> Self {
         match self {
-            Self::Undef(mut s) => {
+            Self::Undef(mut s, (ri, ci)) => {
                 if c == '$' {
                     if !s.is_empty() {
                         let mut otd = Otd::new();
                         otd.args.push(s);
+                        (otd.row_col.0, otd.row_col.1) = (ri, ci);
+
+                        (otd.row_col.2, otd.row_col.3) = (row, col);
+                        if col != 0 {
+                            otd.row_col.3 = col - 1;
+                        }
+
                         otds.push(otd);
                     }
 
@@ -243,7 +263,12 @@ impl OtdState {
                 }
 
                 s.push(c);
-                Self::Undef(s)
+
+                if s.len() == 1 {
+                    return Self::Undef(s, (row, col));
+                }
+
+                Self::Undef(s, (ri, ci))
             }
             Self::Func(mut otd) => {
                 if c == '(' {
@@ -292,12 +317,13 @@ impl OtdState {
 
                 if c == ';' {
                     (otd.row_col.2, otd.row_col.3) = (row, col);
-                    if otd.row_col.0 == otd.row_col.2 && otd.row_col.1 == 0 && c_is_end {
-                        otd.is_line = true;
-                    }
+                    otd.is_line = c_is_end;
+                    // if otd.row_col.0 == otd.row_col.2 && otd.row_col.1 == 0 && c_is_end {
+                    //     otd.is_line = true;
+                    // }
 
                     otds.push(otd);
-                    return Self::Undef(String::new());
+                    return Self::Undef(String::new(), (0, 0));
                 }
 
                 Self::FuncNext(otd)
@@ -378,7 +404,7 @@ impl OtdState {
                     OtdState::BlockEnd => {
                         (otd.row_col.2, otd.row_col.3) = (row, col);
                         otds.push(otd);
-                        Self::Undef(String::new())
+                        Self::Undef(String::new(), (0, 0))
                     }
                     _ => Self::Block(otd, Box::new(sub_state)),
                 }
