@@ -38,14 +38,18 @@ impl Otd {
             //     otd_state = otd_state.push(&mut otds, '\n', ri - 1, rows[ri - 1].len(), false);
             // }
 
+            // if otd_state.is_undef() && !otd_state.is_empty() && !rows[ri - 1].is_empty() {
+            //     otd_state = otd_state.push(&mut otds, '\n', ri - 1, rows[ri - 1].len(), false);
+            // }
+
+            if otd_state.is_undef() && !otd_state.is_empty() && !rows[ri - 1].is_empty() {
+                otd_state = otd_state.push(&mut otds, '\n', ri - 1, rows[ri - 1].len(), false);
+            }
+
             if row.is_empty() {
                 // 空行，需要添加换行符
                 otd_state = otd_state.push(&mut otds, '\n', ri, 0, true);
                 continue;
-            }
-
-            if otd_state.is_undef() && !otd_state.is_empty() && !rows[ri - 1].is_empty() {
-                otd_state = otd_state.push(&mut otds, '\n', ri - 1, rows[ri - 1].len(), false);
             }
 
             for (ci, c) in row.chars().enumerate() {
@@ -225,6 +229,7 @@ impl OtdState {
     fn is_empty(&self) -> bool {
         match self {
             Self::Undef(s, _) => s.is_empty(),
+            Self::Block(_, ss) => ss.is_empty(),
             _ => false,
         }
     }
@@ -248,8 +253,8 @@ impl OtdState {
                         let mut otd = Otd::new();
                         otd.args.push(s);
                         (otd.row_col.0, otd.row_col.1) = (ri, ci);
-
                         (otd.row_col.2, otd.row_col.3) = (row, col);
+
                         if col != 0 {
                             otd.row_col.3 = col - 1;
                         }
@@ -317,10 +322,19 @@ impl OtdState {
 
                 if c == ';' {
                     (otd.row_col.2, otd.row_col.3) = (row, col);
-                    otd.is_line = c_is_end;
-                    // if otd.row_col.0 == otd.row_col.2 && otd.row_col.1 == 0 && c_is_end {
-                    //     otd.is_line = true;
-                    // }
+
+                    if c_is_end && otd.row_col.1 == 0 && otd.row_col.0 == otd.row_col.2 {
+                        otd.is_line = true;
+                    }
+
+                    if c_is_end && otd.row_col.1 > 0 && otd.row_col.0 == otd.row_col.2 {
+                        otds.push(otd);
+
+                        otd = Otd::new();
+                        otd.args.push('\n'.to_string());
+                        (otd.row_col.0, otd.row_col.1) = (row, col + 1);
+                        (otd.row_col.2, otd.row_col.3) = (row, col + 1);
+                    }
 
                     otds.push(otd);
                     return Self::Undef(String::new(), (0, 0));
