@@ -107,20 +107,25 @@ impl Otd {
     fn _get(&self, stack: &mut Stack, is_try: bool) {
         assert!(!self.args.is_empty(), "error: args is empty, {:?}", self);
 
-        let name = &self.args[0];
-        if let Some(val) = stack.get(name) {
-            print!("{}", val.to_string());
+        let vp = |val: &Value| {
+            match val {
+                Value::String(s) => print!("{}", s),
+                _ => print!("{}", val.to_string()),
+            };
+
             if self.is_line {
                 print!("\n");
             }
+        };
+
+        let name = &self.args[0];
+        if let Some(val) = stack.get(name) {
+            vp(val);
             return;
         }
 
         if let Some(val) = stack.ref_object_get(name) {
-            print!("{}", val.to_string());
-            if self.is_line {
-                print!("\n");
-            }
+            vp(val);
             return;
         }
 
