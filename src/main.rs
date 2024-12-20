@@ -1,8 +1,8 @@
 use serde_json::Value;
 use std::fs;
 
-mod otd;
 mod cli;
+mod otd;
 
 fn main() {
     let matches = cli::matches();
@@ -21,8 +21,10 @@ fn main() {
     let mut stack = otd::stack::Stack::new();
     stack.push_ref(openapi);
 
+    let funcmanage = otd::func::OtdFuncManage;
+
     for otd in otds.iter() {
-        otd.run(&mut stack);
+        otd.run(&mut stack, &funcmanage);
     }
 }
 
@@ -30,4 +32,3 @@ fn read_json(filepath: &str) -> Value {
     let file_content = fs::read_to_string(filepath).expect("error: reading file field");
     serde_json::from_str(&file_content).expect("error: serializing to json field")
 }
-

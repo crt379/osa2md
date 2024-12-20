@@ -1,20 +1,20 @@
-use std::collections::HashMap;
-
-use serde_json::Value;
-
 use super::stack::Stack;
+
+pub trait OtdFuncManageI {
+    fn get(&self, func_name: &str) -> Option<fn(&Otd, &mut Stack, &dyn OtdFuncManageI)>;
+}
 
 #[derive(Debug)]
 pub struct Otd {
-    func: String,
-    args: Vec<String>,
-    cond: Vec<Option<Vec<String>>>,
-    ncond: Vec<Option<Vec<String>>>,
-    spac: Option<Vec<Otd>>,
+    pub func: String,
+    pub args: Vec<String>,
+    pub cond: Vec<Option<Vec<String>>>,
+    pub ncond: Vec<Option<Vec<String>>>,
+    pub spac: Option<Vec<Otd>>,
     // start_row, start_col, end_row, end_col
-    row_col: (usize, usize, usize, usize),
+    pub row_col: (usize, usize, usize, usize),
     // 是否是一行
-    is_line: bool,
+    pub is_line: bool,
 }
 
 impl Otd {
@@ -34,14 +34,6 @@ impl Otd {
         let mut otds = Vec::new();
         let mut otd_state = OtdState::new();
         for (ri, row) in rows.iter().enumerate() {
-            // if otd_state.is_undef() && !otd_state.is_empty() {
-            //     otd_state = otd_state.push(&mut otds, '\n', ri - 1, rows[ri - 1].len(), false);
-            // }
-
-            // if otd_state.is_undef() && !otd_state.is_empty() && !rows[ri - 1].is_empty() {
-            //     otd_state = otd_state.push(&mut otds, '\n', ri - 1, rows[ri - 1].len(), false);
-            // }
-
             if otd_state.is_undef() && !otd_state.is_empty() && !rows[ri - 1].is_empty() {
                 otd_state = otd_state.push(&mut otds, '\n', ri - 1, rows[ri - 1].len(), false);
             }
@@ -64,144 +56,11 @@ impl Otd {
         otds
     }
 
-    pub fn run(&self, stack: &mut Stack) {
-        match self.func.as_str() {
-            "" => self._echo(stack),
-            "go" => self._go(stack),
-            "get" => self._get(stack, false),
-            "tryget" => self._get(stack, true),
-            "for" => self._for(stack),
-            _ => panic!("error: unknown func {}", self.func),
-        }
-    }
-
-    fn _echo(&self, _stack: &mut Stack) {
-        print!("{}", self.args[0].as_str());
-    }
-
-    fn _go(&self, stack: &mut Stack) {
-        assert!(!self.args.is_empty(), "error: args is empty, {:?}", self);
-
-        assert!(
-            self.args.len() == 2,
-            "error: there are {} parameters, but 2 are required, {:?}",
-            self.args.len(),
-            self
-        );
-
-        let path = &self.args[0];
-        let name = &self.args[1];
-        if let Some(val) = stack.get(path) {
-            stack.push(HashMap::from([(name.to_string(), val.clone())]));
-            return;
-        }
-
-        if let Some(val) = stack.ref_object_get(path) {
-            stack.push(HashMap::from([(name.to_string(), val.clone())]));
-            return;
-        }
-
-        panic!("error: not found {}, {:?}", path, self);
-    }
-
-    fn _get(&self, stack: &mut Stack, is_try: bool) {
-        assert!(!self.args.is_empty(), "error: args is empty, {:?}", self);
-
-        let vp = |val: &Value| {
-            match val {
-                Value::String(s) => print!("{}", s),
-                _ => print!("{}", val.to_string()),
-            };
-
-            if self.is_line {
-                print!("\n");
-            }
-        };
-
-        let name = &self.args[0];
-        if let Some(val) = stack.get(name) {
-            vp(val);
-            return;
-        }
-
-        if let Some(val) = stack.ref_object_get(name) {
-            vp(val);
-            return;
-        }
-
-        if is_try {
-            return;
-        }
-
-        panic!("error: not found {}, {:?}", name, self);
-    }
-
-    fn _for(&self, stack: &mut Stack) {
-        assert!(!self.args.is_empty(), "error: args is empty, {:?}", self);
-
-        assert!(
-            self.args.len() >= 2,
-            "error: fewer than 2 parameters, {:?}",
-            self
-        );
-
-        let name = &self.args[1];
-        let source = &self.args[0];
-        let val = match stack.get(source) {
-            Some(val) => val,
-            None => {
-                if let Some(val) = stack.ref_object_get(source) {
-                    val
-                } else {
-                    panic!("error: not found {}, {:?}", name, self);
-                }
-            }
-        };
-
-        match val {
-            Value::Array(_vec) => {}
-            Value::Object(map) => {
-                if self.cond.len() > 1 && self.cond[1].is_some() {
-                    let map = map.clone();
-                    for only in self.cond[1].as_ref().unwrap().iter() {
-                        let mut new_stack =
-                            HashMap::from([(name.to_string(), Value::from(only.to_string()))]);
-                        if self.args.len() > 2 {
-                            new_stack
-                                .insert(self.args[2].to_string(), map.get(only).unwrap().clone());
-                        }
-
-                        stack.push(new_stack);
-                        for cmd in self.spac.as_ref().unwrap() {
-                            cmd.run(stack);
-                        }
-                        stack.pop();
-                    }
-                    return;
-                }
-
-                for (k, v) in map.clone().iter() {
-                    if self.ncond.len() > 1
-                        && self.ncond[1].is_some()
-                        && self.ncond[1].as_ref().unwrap().contains(k)
-                    {
-                        continue;
-                    }
-
-                    let mut new_stack =
-                        HashMap::from([(name.to_string(), Value::from(k.as_str()))]);
-                    if self.args.len() > 2 {
-                        new_stack.insert(self.args[2].to_string(), v.clone());
-                    }
-
-                    stack.push(new_stack);
-                    for cmd in self.spac.as_ref().unwrap() {
-                        cmd.run(stack);
-                    }
-                    stack.pop();
-                }
-            }
-            _ => {}
+    pub fn run(&self, stack: &mut Stack, funcmanager: &dyn OtdFuncManageI) {
+        if let Some(func) = funcmanager.get(&self.func) {
+            func(self, stack, funcmanager);
+        } else {
+            panic!("error: unknown func {}", self.func);
         }
     }
 }
