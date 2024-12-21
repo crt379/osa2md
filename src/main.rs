@@ -3,6 +3,7 @@ use std::fs;
 
 mod cli;
 mod otd;
+mod common;
 
 fn main() {
     let matches = cli::matches();
@@ -15,11 +16,13 @@ fn main() {
     let contents = fs::read_to_string(template).unwrap();
 
     let rows: Vec<&str> = contents.lines().map(|line| line).collect();
+    // rows.clone().into_iter().for_each(|row| println!("{}", row));
 
     let otds = otd::otd::Otd::parse(&rows);
+    // println!("{:?}", otds);
 
     let mut stack = otd::stack::Stack::new();
-    stack.push_ref(openapi);
+    stack.push_val(openapi);
 
     let funcmanage = otd::func::OtdFuncManage;
 

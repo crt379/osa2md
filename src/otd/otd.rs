@@ -1,7 +1,12 @@
+use serde_json::Value;
+
 use super::stack::Stack;
 
 pub trait OtdFuncManageI {
-    fn get(&self, func_name: &str) -> Option<fn(&Otd, &mut Stack, &dyn OtdFuncManageI)>;
+    fn get(
+        &self,
+        func_name: &str,
+    ) -> Option<fn(&Otd, &mut Stack, &dyn OtdFuncManageI) -> Option<Value>>;
 }
 
 #[derive(Debug)]
@@ -10,6 +15,7 @@ pub struct Otd {
     pub args: Vec<String>,
     pub cond: Vec<Option<Vec<String>>>,
     pub ncond: Vec<Option<Vec<String>>>,
+    pub remark: Option<String>,
     pub spac: Option<Vec<Otd>>,
     // start_row, start_col, end_row, end_col
     pub row_col: (usize, usize, usize, usize),
@@ -24,6 +30,7 @@ impl Otd {
             args: Vec::new(),
             cond: Vec::new(),
             ncond: Vec::new(),
+            remark: None,
             spac: None,
             row_col: (0, 0, 0, 0),
             is_line: false,
@@ -56,9 +63,9 @@ impl Otd {
         otds
     }
 
-    pub fn run(&self, stack: &mut Stack, funcmanager: &dyn OtdFuncManageI) {
+    pub fn run(&self, stack: &mut Stack, funcmanager: &dyn OtdFuncManageI) -> Option<Value> {
         if let Some(func) = funcmanager.get(&self.func) {
-            func(self, stack, funcmanager);
+            return func(self, stack, funcmanager);
         } else {
             panic!("error: unknown func {}", self.func);
         }
@@ -144,10 +151,6 @@ impl OtdState {
                     return Self::Args(otd);
                 }
 
-                if c == ';' {
-                    return Self::BlockEnd;
-                }
-
                 otd.func.push(c);
                 Self::Func(otd)
             }
@@ -185,6 +188,11 @@ impl OtdState {
                 }
 
                 if c == ';' {
+                    if otd.func.is_empty() {
+                        // $();
+                        return Self::BlockEnd;
+                    }
+
                     (otd.row_col.2, otd.row_col.3) = (row, col);
 
                     if c_is_end && otd.row_col.1 == 0 && otd.row_col.0 == otd.row_col.2 {
@@ -203,6 +211,8 @@ impl OtdState {
                     otds.push(otd);
                     return Self::Undef(String::new(), (0, 0));
                 }
+
+                otd.remark.get_or_insert(String::new()).push(c);
 
                 Self::FuncNext(otd)
             }

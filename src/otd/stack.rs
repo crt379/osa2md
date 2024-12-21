@@ -2,115 +2,168 @@ use std::collections::HashMap;
 
 use serde_json::Value;
 
+use crate::common::common;
+
 #[derive(Debug)]
 pub enum StackValue {
-    Ref(Value),
-    Val(HashMap<String, Value>),
+    Val(Value),
+    HVal(HashMap<String, Value>),
 }
 
 #[derive(Debug)]
 pub struct Stack {
     stack: Vec<StackValue>,
+    context: HashMap<String, Value>,
 }
 
 impl Stack {
     pub fn new() -> Self {
-        Stack { stack: vec![] }
+        Stack {
+            stack: Vec::new(),
+            context: HashMap::new(),
+        }
     }
 
-    pub fn push(&mut self, val: HashMap<String, Value>) {
-        // println!("push: {:?}", val);
+    pub fn push_val(&mut self, val: Value) {
         self.stack.push(StackValue::Val(val));
     }
 
-    pub fn push_ref(&mut self, val: Value) {
-        self.stack.push(StackValue::Ref(val));
+    pub fn push_hval(&mut self, val: HashMap<String, Value>) {
+        self.stack.push(StackValue::HVal(val));
     }
 
     pub fn pop(&mut self) -> Option<StackValue> {
         self.stack.pop()
     }
 
-    pub fn get(&self, key: &str) -> Option<&Value> {
+    pub fn set_context(&mut self, key: String, value: Value) {
+        self.context.insert(key, value);
+    }
+
+    pub fn get_context(&self, key: &str) -> Option<&Value> {
+        self.context.get(key)
+    }
+
+    pub fn remove_context(&mut self, key: &str) {
+        self.context.remove(key);
+    }
+
+    pub fn first_value(&self) -> Option<&Value> {
         if self.stack.is_empty() {
             return None;
         }
 
-        // let mut limit = 2;
-        // for sv in self.stack.iter().rev() {
-        //     if limit == 0 {
-        //         break;
-        //     }
-        //     limit -= 1;
-
-        //     match sv {
-        //         StackValue::Ref(v) => {
-        //             if let Some(v) = v.get(key) {
-        //                 return Some(v);
-        //             }
-        //         }
-        //         StackValue::Val(v) => {
-        //             if let Some(v) = v.get(key) {
-        //                 return Some(v);
-        //             }
-        //         }
-        //     }
-        // }
-
-        let sv = self.stack.last().unwrap();
-        if key.find('.').is_some() {
-            match sv {
-                StackValue::Ref(v) => {
-                    let v = key.split('.').try_fold(v, |target, token| match target {
-                        Value::Object(map) => map.get(token),
-                        _ => None,
-                    });
-
-                    if let Some(v) = v {
-                        return Some(v);
-                    }
-                }
-                StackValue::Val(v) => {
-                    let mut p = key.split('.');
-                    let v = v.get(p.next().unwrap()).unwrap();
-                    let v = p.try_fold(v, |target, token| match target {
-                        Value::Object(map) => map.get(token),
-                        _ => None,
-                    });
-
-                    if let Some(v) = v {
-                        return Some(v);
-                    }
-                }
-            }
-        } else {
-            match sv {
-                StackValue::Ref(v) => {
-                    if let Some(v) = v.get(key) {
-                        return Some(v);
-                    }
-                }
-                StackValue::Val(v) => {
-                    if let Some(v) = v.get(key) {
-                        return Some(v);
-                    }
-                }
-            }
+        match &self.stack[0] {
+            StackValue::Val(v) => Some(v),
+            StackValue::HVal(_) => None,
         }
-
-        None
     }
 
-    pub fn ref_object_get(&self, key: &str) -> Option<&Value> {
-        if let Some(v) = self.get("$ref") {
-            let ref_str = v.as_str().unwrap();
-            if ref_str.chars().nth(0) == Some('#') {
-                if let StackValue::Ref(v) = &self.stack[0] {
-                    return v.pointer(&ref_str[1..]).unwrap().get(key);
-                }
-            }
+    pub fn last(&self) -> Option<&StackValue> {
+        self.stack.last()
+    }
+
+    pub fn _get(&self, key: &str) -> Option<&Value> {
+        if self.stack.is_empty() {
+            return None;
         }
 
-        None
+        match self.last().unwrap() {
+            StackValue::Val(value) => {
+                if let Some(ret) = key
+                    .split('.')
+                    .try_fold(value, |target, token| match target {
+                        Value::Object(map) => map.get(token),
+                        _ => None,
+                    })
+                {
+                    return Some(ret);
+                }
+
+                None
+            }
+            StackValue::HVal(value) => {
+                let keys: Vec<&str> = key.split('.').collect();
+                if let Some(value) = value.get(keys[0]) {
+                    if keys.len() == 1 {
+                        return Some(value);
+                    }
+
+                    if let Some(ret) =
+                        keys.clone()
+                            .iter()
+                            .skip(1)
+                            .try_fold(value, |value, token| match value {
+                                Value::Object(map) => map.get(*token),
+                                _ => None,
+                            })
+                    {
+                        return Some(ret);
+                    }
+                }
+
+                None
+            }
+        }
+    }
+
+    pub fn get_or_ref(&self, key: &str) -> Option<&Value> {
+        if self.stack.is_empty() {
+            return None;
+        }
+
+        match self.last().unwrap() {
+            StackValue::Val(value) => {
+                if let Some(ret) = key
+                    .split('.')
+                    .try_fold(value, |target, token| match target {
+                        Value::Object(map) => map.get(token),
+                        _ => None,
+                    })
+                {
+                    return Some(ret);
+                }
+
+                if let Some(refval) = value.get("$ref") {
+                    return common::try_ref_get(
+                        self.first_value().unwrap(),
+                        key,
+                        refval.as_str().unwrap(),
+                    );
+                }
+
+                None
+            }
+            StackValue::HVal(value) => {
+                let keys: Vec<&str> = key.split('.').collect();
+                if let Some(value) = value.get(keys[0]) {
+                    if keys.len() == 1 {
+                        return Some(value);
+                    }
+
+                    if let Some(ret) =
+                        keys.clone()
+                            .iter()
+                            .skip(1)
+                            .try_fold(value, |value, token| match value {
+                                Value::Object(map) => map.get(*token),
+                                _ => None,
+                            })
+                    {
+                        return Some(ret);
+                    }
+
+                    if let Some(refval) = value.get("$ref") {
+                        return common::try_ref_get(
+                            self.first_value().unwrap(),
+                            &keys[1..].join("."),
+                            refval.as_str().unwrap(),
+                        );
+                    }
+                }
+
+                None
+            }
+        }
     }
 }
