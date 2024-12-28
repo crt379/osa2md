@@ -1,20 +1,8 @@
-use serde_json::Value;
-
-use super::stack::Stack;
-
-pub trait OtdFuncManageI {
-    fn get(
-        &self,
-        func_name: &str,
-    ) -> Option<fn(&Otd, &mut Stack, &dyn OtdFuncManageI) -> Option<Value>>;
-}
-
 #[derive(Debug)]
 pub struct Otd {
     pub func: String,
-    pub args: Vec<String>,
-    pub cond: Vec<Option<Vec<String>>>,
-    pub ncond: Vec<Option<Vec<String>>>,
+    // arg, conds, nconds
+    pub args: Vec<(String, Option<Vec<String>>, Option<Vec<String>>)>,
     pub remark: Option<String>,
     pub spac: Option<Vec<Otd>>,
     // start_row, start_col, end_row, end_col
@@ -28,8 +16,6 @@ impl Otd {
         Self {
             func: String::new(),
             args: Vec::new(),
-            cond: Vec::new(),
-            ncond: Vec::new(),
             remark: None,
             spac: None,
             row_col: (0, 0, 0, 0),
@@ -61,14 +47,6 @@ impl Otd {
         }
 
         otds
-    }
-
-    pub fn run(&self, stack: &mut Stack, funcmanager: &dyn OtdFuncManageI) -> Option<Value> {
-        if let Some(func) = funcmanager.get(&self.func) {
-            return func(self, stack, funcmanager);
-        } else {
-            panic!("error: unknown func {}", self.func);
-        }
     }
 }
 
@@ -109,7 +87,7 @@ impl OtdState {
         match self {
             Self::Undef(s, _) => {
                 let mut otd = Otd::new();
-                otd.args.push(s);
+                otd.args.push((s, None, None));
                 otd
             }
             _ => panic!("error: cannot convert to otd"),
@@ -122,7 +100,7 @@ impl OtdState {
                 if c == '$' {
                     if !s.is_empty() {
                         let mut otd = Otd::new();
-                        otd.args.push(s);
+                        otd.args.push((s, None, None));
                         (otd.row_col.0, otd.row_col.1) = (ri, ci);
                         (otd.row_col.2, otd.row_col.3) = (row, col);
 
@@ -160,24 +138,30 @@ impl OtdState {
                 }
 
                 if c == ',' {
-                    otd.args.push(String::new());
+                    otd.args.push((String::new(), None, None));
                     return Self::Args(otd);
                 }
 
                 if c == '{' {
+                    let (_, c, n) = otd.args.last_mut().unwrap();
+                    *c = Some(vec![String::new()]);
+                    *n = Some(vec![String::new()]);
                     return Self::Cond(otd);
                 }
 
                 if c == ' ' {
-                    // todo 中间有空格
+                    if !otd.args.last().unwrap().0.is_empty() {
+                        panic!("error: cannot add space in arg")
+                    }
                     return Self::Args(otd);
                 }
 
                 if otd.args.is_empty() {
-                    otd.args.push(c.to_string());
-                } else {
-                    otd.args.last_mut().unwrap().push(c);
+                    otd.args.push((String::new(), None, None));
                 }
+
+                let (arg, _, _) = otd.args.last_mut().unwrap();
+                arg.push(c);
 
                 Self::Args(otd)
             }
@@ -203,7 +187,7 @@ impl OtdState {
                         otds.push(otd);
 
                         otd = Otd::new();
-                        otd.args.push('\n'.to_string());
+                        otd.args.push(('\n'.to_string(), None, None));
                         (otd.row_col.0, otd.row_col.1) = (row, col + 1);
                         (otd.row_col.2, otd.row_col.3) = (row, col + 1);
                     }
@@ -218,6 +202,23 @@ impl OtdState {
             }
             Self::Cond(mut otd) => {
                 if c == '}' {
+                    let (_, c, n) = otd.args.last_mut().unwrap();
+                    if c.as_ref().unwrap().last().unwrap().is_empty() {
+                        c.as_mut().unwrap().pop();
+                    }
+
+                    if c.as_ref().unwrap().is_empty() {
+                        *c = None;
+                    }
+
+                    if n.as_ref().unwrap().last().unwrap().is_empty() {
+                        n.as_mut().unwrap().pop();
+                    }
+
+                    if n.as_ref().unwrap().is_empty() {
+                        *n = None;
+                    }
+
                     return Self::Args(otd);
                 }
 
@@ -226,64 +227,84 @@ impl OtdState {
                 }
 
                 if c == ',' {
-                    otd.cond
+                    otd.args
                         .last_mut()
                         .unwrap()
-                        .get_or_insert(vec![String::new()])
+                        .1
+                        .as_mut()
+                        .unwrap()
                         .push(String::new());
                     return Self::Cond(otd);
                 }
 
                 if c == ' ' {
-                    // todo 中间有空格
+                    if !otd.args.last().unwrap().1.as_ref().unwrap().is_empty() {
+                        panic!("error: cannot add space in arg cond")
+                    }
                     return Self::Cond(otd);
                 }
 
-                for _ in 0..otd.args.len() - otd.cond.len() {
-                    otd.cond.push(None);
-                }
-
-                otd.cond
+                otd.args
                     .last_mut()
                     .unwrap()
-                    .get_or_insert(vec![String::new()])
+                    .1
+                    .as_mut()
+                    .unwrap()
                     .last_mut()
-                    .get_or_insert(&mut String::new())
+                    .unwrap()
                     .push(c);
 
                 Self::Cond(otd)
             }
             Self::NCond(mut otd) => {
                 if c == '}' {
+                    let (_, c, n) = otd.args.last_mut().unwrap();
+                    if c.as_ref().unwrap().last().unwrap().is_empty() {
+                        c.as_mut().unwrap().pop();
+                    }
+
+                    if c.as_ref().unwrap().is_empty() {
+                        *c = None;
+                    }
+
+                    if n.as_ref().unwrap().last().unwrap().is_empty() {
+                        n.as_mut().unwrap().pop();
+                    }
+
+                    if n.as_ref().unwrap().is_empty() {
+                        *n = None;
+                    }
+
                     return Self::Args(otd);
                 }
 
                 if c == ',' {
-                    otd.ncond
+                    otd.args
                         .last_mut()
                         .unwrap()
-                        .get_or_insert(Vec::new())
+                        .2
+                        .as_mut()
+                        .unwrap()
                         .push(String::new());
                     return Self::Cond(otd);
                 }
 
                 if c == ' ' {
-                    // todo 中间有空格
+                    if !otd.args.last().unwrap().2.as_ref().unwrap().is_empty() {
+                        panic!("error: cannot add space in arg cond")
+                    }
                     return Self::NCond(otd);
                 }
 
-                for _ in 0..(otd.args.len() - otd.ncond.len()) {
-                    otd.ncond.push(None);
-                }
-
-                otd.ncond
+                otd.args
                     .last_mut()
                     .unwrap()
-                    .get_or_insert(Vec::new())
+                    .2
+                    .as_mut()
+                    .unwrap()
                     .last_mut()
-                    .get_or_insert(&mut String::new())
+                    .unwrap()
                     .push(c);
-
                 Self::NCond(otd)
             }
             Self::Block(mut otd, sub_state) => {
