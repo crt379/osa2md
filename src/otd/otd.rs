@@ -58,6 +58,7 @@ enum OtdState {
     FuncNext(Otd),
     Cond(Otd),
     NCond(Otd),
+    CondNext(Otd),
     Block(Otd, Box<Self>),
     BlockEnd,
 }
@@ -202,24 +203,7 @@ impl OtdState {
             }
             Self::Cond(mut otd) => {
                 if c == '}' {
-                    let (_, c, n) = otd.args.last_mut().unwrap();
-                    if c.as_ref().unwrap().last().unwrap().is_empty() {
-                        c.as_mut().unwrap().pop();
-                    }
-
-                    if c.as_ref().unwrap().is_empty() {
-                        *c = None;
-                    }
-
-                    if n.as_ref().unwrap().last().unwrap().is_empty() {
-                        n.as_mut().unwrap().pop();
-                    }
-
-                    if n.as_ref().unwrap().is_empty() {
-                        *n = None;
-                    }
-
-                    return Self::Args(otd);
+                    return Self::CondNext(otd).push(otds, ' ', row, col, c_is_end);
                 }
 
                 if c == '!' {
@@ -258,24 +242,7 @@ impl OtdState {
             }
             Self::NCond(mut otd) => {
                 if c == '}' {
-                    let (_, c, n) = otd.args.last_mut().unwrap();
-                    if c.as_ref().unwrap().last().unwrap().is_empty() {
-                        c.as_mut().unwrap().pop();
-                    }
-
-                    if c.as_ref().unwrap().is_empty() {
-                        *c = None;
-                    }
-
-                    if n.as_ref().unwrap().last().unwrap().is_empty() {
-                        n.as_mut().unwrap().pop();
-                    }
-
-                    if n.as_ref().unwrap().is_empty() {
-                        *n = None;
-                    }
-
-                    return Self::Args(otd);
+                    return Self::CondNext(otd).push(otds, ' ', row, col, c_is_end);
                 }
 
                 if c == ',' {
@@ -306,6 +273,26 @@ impl OtdState {
                     .unwrap()
                     .push(c);
                 Self::NCond(otd)
+            }
+            Self::CondNext(mut otd) => {
+                let (_, c, n) = otd.args.last_mut().unwrap();
+                if c.as_ref().unwrap().last().unwrap().is_empty() {
+                    c.as_mut().unwrap().pop();
+                }
+
+                if c.as_ref().unwrap().is_empty() {
+                    *c = None;
+                }
+
+                if n.as_ref().unwrap().last().unwrap().is_empty() {
+                    n.as_mut().unwrap().pop();
+                }
+
+                if n.as_ref().unwrap().is_empty() {
+                    *n = None;
+                }
+
+                return Self::Args(otd);
             }
             Self::Block(mut otd, sub_state) => {
                 let sub_state = sub_state.push(otd.spac.as_mut().unwrap(), c, row, col, c_is_end);
