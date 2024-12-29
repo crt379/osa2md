@@ -32,6 +32,16 @@ $for(methodobj.responses, code, responseobj)`code`:
 $tryget(responseobj.description);
 
 $go(responseobj.content, contentobj);
-$(`code`);
-$(`method`);
-$(`path`);
+|参数名|类型|必填|说明|
+|:-----:|:-----:|:-----:|:-----:|
+$for(contentobj, mediaType{application/json}, mediaTypeobj)`mediaType`:
+$for(mediaTypeobj.schema.properties, item, itemobj)`item`:
+|$get(item);|$osa3type(itemobj);|$tryget(itemobj.required, false);|$tryget(itemobj.description, none);|
+$()`item`;
+$()`mediaType`;
+
+
+
+$()`code`;
+$()`method`;
+$()`path`;

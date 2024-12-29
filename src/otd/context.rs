@@ -25,7 +25,7 @@ impl VPath {
     }
 
     pub fn vec_from_string(s: &str) -> Vec<Self> {
-        s.split(&['/', '.'][..])
+        s.split(&['/'][..])
             .skip_while(|k| *k == "#" || *k == "/" || *k == "#/")
             .map(|k| Self::from_string(&k.replace("~1", "/")))
             .collect::<Vec<_>>()
@@ -119,7 +119,7 @@ impl CtxValue {
                 None => {
                     if let Some(r) = map.get("$ref").and_then(|r| r.as_str()) {
                         VPPaths::new(&VPath::vec_from_string(r))
-                            .value(self.value().unwrap())
+                            .value(self.value())
                             .unwrap()
                             .get(key)
                     } else {
@@ -138,10 +138,10 @@ impl CtxValue {
         }
     }
 
-    pub fn value(&self) -> Option<&Value> {
+    pub fn value(&self) -> &Value {
         match self {
-            Self::Locals(_, value) => Some(value),
-            Self::Basics(_, value) => Some(value),
+            Self::Locals(_, value) => value,
+            Self::Basics(_, value) => value,
         }
     }
 
@@ -157,6 +157,13 @@ impl CtxValue {
                 .map(|p| p.to_string())
                 .collect::<Vec<_>>()
                 .join("/"),
+        }
+    }
+
+    pub fn paths(&self) -> &Vec<VPath> {
+        match self {
+            Self::Locals(paths, _) => paths,
+            Self::Basics(paths, _) => paths,
         }
     }
 }

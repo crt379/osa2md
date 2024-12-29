@@ -1,6 +1,6 @@
 use std::rc::Rc;
 
-use serde_json::{Map, Value};
+use serde_json::Value;
 
 use super::context::{Context, CtxValue, VPPaths, VPath};
 use super::exec::IFunc;
@@ -43,13 +43,11 @@ pub fn go(ctx: Context, otd: &Otd, _: &dyn IFunc) -> Option<(String, Rc<CtxValue
         otd
     );
 
-    let path = &otd.args[0].0;
-    let name = &otd.args[1].0;
-    if let Some(val) = ctx.get(path) {
-        return Some((name.to_string(), val));
+    if let Some(val) = ctx.get(&otd.args[0].0.replace(".", "/")) {
+        return Some((otd.args[1].0.to_string(), val));
     }
 
-    panic!("error: not found {}, {:?}", path, otd);
+    panic!("error: not found {}, {:?}", otd.args[0].0, otd);
 }
 
 pub fn ret(mut ctx: Context, _: &Otd, _: &dyn IFunc) -> Option<(String, Rc<CtxValue>)> {
@@ -65,8 +63,7 @@ fn get_base(
 ) -> Option<(String, Rc<CtxValue>)> {
     assert!(!otd.args.is_empty(), "error: args is empty, {:?}", otd);
 
-    let name = &otd.args[0].0;
-    if let Some(val) = ctx.get(name) {
+    if let Some(val) = ctx.get(&otd.args[0].0.replace(".", "/")) {
         let v = val.as_ref().ref_value().unwrap();
         match v {
             Value::String(s) => print!("{}", s),
@@ -91,7 +88,7 @@ fn get_base(
         return None;
     }
 
-    panic!("error: not found {}, {:?}", name, otd);
+    panic!("error: not found {}, {:?}", otd.args[0].0, otd);
 }
 
 pub fn get(ctx: Context, otd: &Otd, funcmanage: &dyn IFunc) -> Option<(String, Rc<CtxValue>)> {
@@ -118,7 +115,7 @@ fn for_basics(
         }
     }
 
-    if let Some(val) = ctx.get(&otd.args[0].0) {
+    if let Some(val) = ctx.get(&otd.args[0].0.replace(".", "/")) {
         match val.as_ref().ref_value().unwrap() {
             Value::Array(vals) => {
                 for (i, _) in vals.iter().enumerate() {
@@ -206,7 +203,7 @@ fn for_base(
         otd
     );
 
-    let val = ctx.get(&otd.args[0].0);
+    let val = ctx.get(&otd.args[0].0.replace(".", "/"));
     if val.is_none() && is_try {
         return None;
     }
@@ -232,76 +229,6 @@ pub fn tryfor(ctx: Context, otd: &Otd, funcmanage: &dyn IFunc) -> Option<(String
     for_base(ctx, otd, funcmanage, true)
 }
 
-fn array_item_type(val: &Map<String, Value>, key: &str, otd: &Otd) -> String {
-    let item = val.get("items").unwrap_or_else(|| 
-        // schema.items
-        panic!(
-            "error: {}, not found items, {:?}",
-            key, otd
-        ));
-
-    if let Some(e) = item.get("enum") {
-        let mut ret = String::from("enum[");
-        let len = ret.len();
-
-        e.as_array().unwrap().iter().for_each(|i| {
-            ret.push_str(i.as_str().unwrap());
-            ret.push(',');
-        });
-
-        if ret.len() == len {
-            panic!("error: {}.enum, not items, {:?}", key, otd);
-        }
-
-        ret.pop();
-        ret.push(']');
-        return ret;
-    }
-
-    // not in [enum]
-    let it = item.get("type").unwrap_or_else(|| 
-        // schema.items.type
-        panic!(
-            "error: {}.items, not found type, {:?}",
-            key, otd
-        ));
-
-    it.to_string()
-}
-
-fn anyof_item_type(val: &Vec<Value>, key: &str, otd: &Otd) -> String {
-    if val.is_empty() {
-        panic!("error: {}, not items, {:?}", key, otd);
-    }
-
-    let mut ret = String::from("or[");
-
-    val.iter().for_each(|i| match i {
-        Value::Object(val) => {
-            if let Some(tval) = val.get("type") {
-                match tval {
-                    Value::String(t) => {
-                        ret.push_str(t);
-                        ret.push(',');
-                        return;
-                    }
-                    _ => panic!(
-                        "error: {} item: {}, type not implemented, {:?}",
-                        key,
-                        tval.to_string(),
-                        otd
-                    ),
-                }
-            }
-        }
-        _ => panic!("error: {} item not an object, {:?}", key, otd),
-    });
-
-    ret.pop();
-    ret.push(']');
-    return ret;
-}
-
 pub fn osa3type(
     ctx: Context,
     otd: &Otd,
@@ -309,46 +236,50 @@ pub fn osa3type(
 ) -> Option<(String, Rc<CtxValue>)> {
     assert!(!otd.args.is_empty(), "error: args is empty, {:?}", otd);
 
-    let name = &otd.args[0].0;
+    let val = ctx
+        .get(&otd.args[0].0.replace(".", "/"))
+        .unwrap_or_else(|| panic!("error: not found {}, {:?}", otd.args[0].0, otd));
 
-    if let Some(val) = ctx.get(name) {
-        match val.as_ref() {
-            CtxValue::Locals(_, _) => panic!("error: Locals value not implemented"),
-            CtxValue::Basics(_, value) => match value.as_ref() {
-                Value::Object(val) => {
-                    if let Some(tval) = val.get("type") {
-                        match tval {
-                            Value::String(t) => match t.as_str() {
-                                "array" => print!("[{}]", array_item_type(val, name, otd)),
-                                _ => print!("{}", t),
-                            },
-                            _ => panic!(
-                                "error: {}.type: {}, value type not implemented, {:?}",
-                                name,
-                                tval.to_string(),
-                                otd
-                            ),
-                        }
-                    }
-
-                    if let Some(aval) = val.get("anyOf") {
-                        let path = format!("{}", name);
-                        match aval {
-                            Value::Array(vec) => print!("{}", anyof_item_type(vec, &path, otd)),
-                            _ => panic!("error: {} anyOf not an array, {:?}", name, otd),
-                        }
-                    }
+    if let Some(tval) = val.str_get_value("type") {
+        match tval {
+            Value::String(t) => match t.as_str() {
+                "array" => {
+                    let item_type = val.clone().get(["items", "type"].iter().cloned()).unwrap();
+                    print!("[{}]", item_type.ref_value().unwrap().as_str().unwrap());
                 }
-                _ => panic!("error: {} not an object, {:?}", name, otd),
+                _ => print!("{}", t),
             },
-        }
-
-        if otd.is_line {
-            print!("\n");
+            _ => panic!(
+                "error: {}.type, value type not implemented, {:?}",
+                otd.args[0].0, otd
+            ),
         }
     }
 
-    panic!("error: not found {}, {:?}", name, otd);
+    if let Some(aval) = val.str_get_value("anyOf") {
+        match aval {
+            Value::Array(vec) => {
+                let mut of_types = Vec::with_capacity(vec.len());
+                vec.iter().for_each(|v| match v {
+                    Value::Object(v) => {
+                        let v = v.get("type").unwrap_or_else(|| {
+                            panic!("error: {} anyOf, item not type, {:?}", val.path(), otd)
+                        });
+                        of_types.push(v.as_str().unwrap());
+                    }
+                    _ => panic!("error: {} anyOf not an object, {:?}", val.path(), otd),
+                });
+                print!("or[{}]", of_types.join(", "));
+            }
+            _ => panic!("error: {}.anyOf not an array, {:?}", otd.args[0].0, otd),
+        }
+    }
+
+    if otd.is_line {
+        print!("\n");
+    }
+
+    return None;
 }
 
 pub fn recurs(

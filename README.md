@@ -2,7 +2,7 @@
 
 A simple tool to convert OSA(openapi) files to Markdown.
 
-一个将 OSA(openapi) 文件转换为 Markdown 的简单工具。以自定义的脚本语言来实现 Markdown 生成，本工具对脚本语言进行解析，并生成 Markdown 文件。
+将 OSA(openapi) 文件转换为 Markdown 的工具。将下面定义的解析语言将 OSA 数据生成 Markdown 文件。
 
 ## 语言格式
 
