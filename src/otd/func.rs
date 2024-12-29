@@ -2,7 +2,7 @@ use std::rc::Rc;
 
 use serde_json::{Map, Value};
 
-use super::context::{BAPath, Context, CtxValue};
+use super::context::{Context, CtxValue, VPPaths, VPath};
 use super::exec::IFunc;
 use super::otd::Otd;
 
@@ -67,7 +67,7 @@ fn get_base(
 
     let name = &otd.args[0].0;
     if let Some(val) = ctx.get(name) {
-        let v = val.as_ref().value();
+        let v = val.as_ref().ref_value().unwrap();
         match v {
             Value::String(s) => print!("{}", s),
             _ => print!("{}", v.to_string()),
@@ -102,8 +102,13 @@ pub fn tryget(ctx: Context, otd: &Otd, funcmanage: &dyn IFunc) -> Option<(String
     get_base(ctx, otd, funcmanage, true)
 }
 
-fn for_basics(ctx: Context, otd: &Otd, funcmanage: &dyn IFunc, path: &str, _basics: &Rc<Value>) {
-    let name = &otd.args[1].0;
+fn for_basics(
+    ctx: Context,
+    otd: &Otd,
+    funcmanage: &dyn IFunc,
+    vps: &Vec<VPath>,
+    _basics: &Rc<Value>,
+) {
     let mut sub_conds = Vec::<(&str, &str)>::new();
     if otd.args[1].1.is_some() {
         for cond in otd.args[1].1.as_ref().unwrap() {
@@ -114,26 +119,26 @@ fn for_basics(ctx: Context, otd: &Otd, funcmanage: &dyn IFunc, path: &str, _basi
     }
 
     if let Some(val) = ctx.get(&otd.args[0].0) {
-        match val.as_ref().value() {
+        match val.as_ref().ref_value().unwrap() {
             Value::Array(vals) => {
-                // todo cond ncond
-                for (i, v) in vals.iter().enumerate() {
+                for (i, _) in vals.iter().enumerate() {
+                    let item = CtxValue::Basics(
+                        VPPaths::new(vps).push_new_vec(VPath::Index(i)),
+                        ctx.basics.clone(),
+                    );
+
                     for (cond, cval) in sub_conds.iter() {
-                        if !v.get(cond).is_some_and(|v| v.as_str().unwrap() == *cval) {
+                        if !item
+                            .str_get_value(cond)
+                            .is_some_and(|v| v.as_str().unwrap() == *cval)
+                        {
                             continue;
                         }
 
                         let mut forctx = ctx.son();
                         for so in otd.spac.as_ref().unwrap() {
                             let mut ictx = forctx.son();
-                            ictx.insert(
-                                name.to_string(),
-                                Rc::new(CtxValue::BArray(
-                                    path.to_string(),
-                                    vec![BAPath::Index(i)],
-                                    ctx.basics.clone(),
-                                )),
-                            );
+                            ictx.insert(otd.args[1].0.to_string(), Rc::new(item.clone()));
                             if let Some((n, v)) =
                                 funcmanage.get(&so.func).unwrap()(ictx, so, funcmanage)
                             {
@@ -156,9 +161,9 @@ fn for_basics(ctx: Context, otd: &Otd, funcmanage: &dyn IFunc, path: &str, _basi
 
                     let mut forctx = ctx.son();
                     forctx.insert(
-                        name.to_string(),
+                        otd.args[1].0.to_string(),
                         Rc::new(CtxValue::Locals(
-                            format!("{}/{}", path, k.replace("/", "~1")),
+                            VPPaths::new(vps).push_new_vec(VPath::Key(k.clone())),
                             Rc::new(Value::from(k.as_str())),
                         )),
                     );
@@ -167,7 +172,7 @@ fn for_basics(ctx: Context, otd: &Otd, funcmanage: &dyn IFunc, path: &str, _basi
                         forctx.insert(
                             otd.args[2].0.to_string(),
                             Rc::new(CtxValue::Basics(
-                                format!("{}/{}", path, k.replace("/", "~1")),
+                                VPPaths::new(vps).push_new_vec(VPath::Key(k.clone())),
                                 ctx.basics.clone(),
                             )),
                         );
@@ -214,7 +219,6 @@ fn for_base(
         CtxValue::Basics(path, val) => {
             for_basics(ctx, otd, funcmanage, path, val);
         }
-        CtxValue::BArray(_, _, _) => panic!("error: value is locals"),
     }
 
     None
@@ -337,7 +341,6 @@ pub fn osa3type(
                 }
                 _ => panic!("error: {} not an object, {:?}", name, otd),
             },
-            CtxValue::BArray(_, _, _) => panic!("error: BArray value not implemented"),
         }
 
         if otd.is_line {
