@@ -2,8 +2,8 @@ use serde_json::Value;
 use std::fs;
 
 mod cli;
-mod otd;
 mod common;
+mod otd;
 
 fn main() {
     let matches = cli::matches();
@@ -16,19 +16,11 @@ fn main() {
     let contents = fs::read_to_string(template).unwrap();
 
     let rows: Vec<&str> = contents.lines().map(|line| line).collect();
-    // rows.clone().into_iter().for_each(|row| println!("{}", row));
-
     let otds = otd::otd::Otd::parse(&rows);
-    // println!("{:?}", otds);
 
-    let mut stack = otd::stack::Stack::new();
-    stack.push_val(openapi);
-
-    let funcmanage = otd::func::OtdFuncManage;
-
-    for otd in otds.iter() {
-        otd.run(&mut stack, &funcmanage);
-    }
+    let funcmanage = otd::func::FuncManage {};
+    let mut exec = otd::exec::Exec::new(otds, openapi, Box::new(funcmanage));
+    exec.run();
 }
 
 fn read_json(filepath: &str) -> Value {
