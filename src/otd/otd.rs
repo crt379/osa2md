@@ -222,7 +222,17 @@ impl OtdState {
                 }
 
                 if c == ' ' {
-                    if !otd.args.last().unwrap().1.as_ref().unwrap().is_empty() {
+                    if !otd
+                        .args
+                        .last()
+                        .unwrap()
+                        .1
+                        .as_ref()
+                        .unwrap()
+                        .last()
+                        .unwrap()
+                        .is_empty()
+                    {
                         panic!("error: cannot add space in arg cond")
                     }
                     return Self::Cond(otd);
@@ -257,7 +267,17 @@ impl OtdState {
                 }
 
                 if c == ' ' {
-                    if !otd.args.last().unwrap().2.as_ref().unwrap().is_empty() {
+                    if !otd
+                        .args
+                        .last()
+                        .unwrap()
+                        .2
+                        .as_ref()
+                        .unwrap()
+                        .last()
+                        .unwrap()
+                        .is_empty()
+                    {
                         panic!("error: cannot add space in arg cond")
                     }
                     return Self::NCond(otd);

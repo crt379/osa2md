@@ -125,9 +125,9 @@ fn for_basics(
                     );
 
                     for (cond, cval) in sub_conds.iter() {
-                        if !item
+                        if item
                             .str_get_value(cond)
-                            .is_some_and(|v| v.as_str().unwrap() == *cval)
+                            .is_some_and(|v| v.as_str().unwrap() != *cval)
                         {
                             continue;
                         }
@@ -147,11 +147,10 @@ fn for_basics(
             }
             Value::Object(map) => {
                 for (k, _) in map.iter() {
-                    if otd.args[1].1.is_some() && !otd.args[1].1.as_ref().unwrap().contains(k) {
+                    if otd.args[1].1.as_ref().is_some_and(|v| !v.contains(k)) {
                         continue;
                     } else if otd.args[1].1.is_none()
-                        && otd.args[1].2.is_some()
-                        && otd.args[1].2.as_ref().unwrap().contains(k)
+                        && otd.args[1].2.as_ref().is_some_and(|v| v.contains(k))
                     {
                         continue;
                     }
@@ -244,8 +243,31 @@ pub fn osa3type(
         match tval {
             Value::String(t) => match t.as_str() {
                 "array" => {
-                    let item_type = val.clone().get(["items", "type"].iter().cloned()).unwrap();
-                    print!("[{}]", item_type.ref_value().unwrap().as_str().unwrap());
+                    let items = val.clone().get(["items"].iter().cloned()).unwrap();
+                    let mut typestr = items.str_get_value("type").unwrap().as_str().unwrap();
+                    match typestr {
+                        "object" => {
+                            if let Some(title) = items.str_get_value("title") {
+                                typestr = title.as_str().unwrap();
+                            }
+                            print!("[{}]", typestr);
+                        }
+                        _ => {
+                            if let Some(ienum) = items.str_get_value("enum") {
+                                if let Some(e) = ienum.as_array() {
+                                    print!(
+                                        "[enum[{}]]",
+                                        e.iter()
+                                            .filter_map(|i| i.as_str())
+                                            .collect::<Vec<&str>>()
+                                            .join(",")
+                                    );
+                                }
+                            } else {
+                                print!("[{}]", typestr);
+                            }
+                        }
+                    }
                 }
                 _ => print!("{}", t),
             },
