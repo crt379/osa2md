@@ -2,6 +2,8 @@ use std::{collections::HashMap, rc::Rc, sync::RwLock, usize};
 
 use serde_json::Value;
 
+use crate::common::common;
+
 #[derive(Debug, Clone)]
 pub enum VPath {
     Key(String),
@@ -59,9 +61,7 @@ impl<'a> VPPaths<'a> {
     }
 
     pub fn push_new_vec(&self, p: VPath) -> Vec<VPath> {
-        let mut v = self.0.clone();
-        v.push(p);
-        v
+        common::vec_clone_and_push(self.0, p)
     }
 }
 
@@ -109,6 +109,10 @@ impl CtxValue {
                 .map(|_| Self::Basics(npaths, value.clone()))
             }
         }
+    }
+
+    pub fn str_get(&self, key: &str) -> Option<Self> {
+        self.get([key].iter().cloned())
     }
 
     pub fn str_get_value(&self, key: &str) -> Option<&Value> {

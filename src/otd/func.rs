@@ -2,6 +2,8 @@ use std::rc::Rc;
 
 use serde_json::Value;
 
+use crate::common::common;
+
 use super::context::{Context, CtxValue, VPPaths, VPath};
 use super::exec::IFunc;
 use super::otd::Otd;
@@ -278,22 +280,57 @@ pub fn osa3type(
         }
     }
 
-    if let Some(aval) = val.str_get_value("anyOf") {
-        match aval {
-            Value::Array(vec) => {
-                let mut of_types = Vec::with_capacity(vec.len());
-                vec.iter().for_each(|v| match v {
-                    Value::Object(v) => {
-                        let v = v.get("type").unwrap_or_else(|| {
-                            panic!("error: {} anyOf, item not type, {:?}", val.path(), otd)
-                        });
-                        of_types.push(v.as_str().unwrap());
-                    }
-                    _ => panic!("error: {} anyOf not an object, {:?}", val.path(), otd),
-                });
-                print!("or[{}]", of_types.join(", "));
+    if let Some(aval) = val.str_get("anyOf") {
+        if let Some(v) = aval.ref_value() {
+            match v {
+                Value::Array(vec) => {
+                    let mut of_types = Vec::with_capacity(vec.len());
+                    vec.iter().enumerate().for_each(|(i, v)| match v {
+                        Value::Object(_) => {
+                            let nps = common::vec_clone_and_pushs(
+                                aval.paths(),
+                                [VPath::Index(i), VPath::Key("type".to_string())],
+                            );
+                            let t = VPPaths::new(&nps)
+                                .value(ctx.basics.as_ref())
+                                .unwrap_or_else(|| {
+                                    panic!("error: {} anyOf not type, {:?}", val.path(), otd)
+                                });
+                            of_types.push(t.as_str().unwrap());
+                        }
+                        _ => panic!("error: {} anyOf not an object, {:?}", val.path(), otd),
+                    });
+                    print!("or[{}]", of_types.join(","));
+                }
+                _ => panic!("error: {}.anyOf not an array, {:?}", otd.args[0].0, otd),
             }
-            _ => panic!("error: {}.anyOf not an array, {:?}", otd.args[0].0, otd),
+        }
+    }
+
+    if let Some(aval) = val.str_get("allOf") {
+        if let Some(v) = aval.ref_value() {
+            match v {
+                Value::Array(vec) => {
+                    let mut of_types = Vec::with_capacity(vec.len());
+                    vec.iter().enumerate().for_each(|(i, v)| match v {
+                        Value::Object(_) => {
+                            let nps = common::vec_clone_and_pushs(
+                                aval.paths(),
+                                [VPath::Index(i), VPath::Key("type".to_string())],
+                            );
+                            let t = VPPaths::new(&nps)
+                                .value(ctx.basics.as_ref())
+                                .unwrap_or_else(|| {
+                                    panic!("error: {} allOf, item not type, {:?}", val.path(), otd)
+                                });
+                            of_types.push(t.as_str().unwrap());
+                        }
+                        _ => panic!("error: {} allOf not an object, {:?}", val.path(), otd),
+                    });
+                    print!("all[{}]", of_types.join(","));
+                }
+                _ => panic!("error: {}.allOf not an array, {:?}", otd.args[0].0, otd),
+            }
         }
     }
 
