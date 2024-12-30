@@ -230,6 +230,38 @@ pub fn tryfor(ctx: Context, otd: &Otd, funcmanage: &dyn IFunc) -> Option<(String
     for_base(ctx, otd, funcmanage, true)
 }
 
+fn xxxof(ctx: &Context, otd: &Otd, val: &Rc<CtxValue>, of: &str) -> Option<String> {
+    if let Some(of_val) = val.str_get(of) {
+        if let Some(v) = of_val.ref_value() {
+            match v {
+                Value::Array(vec) => {
+                    let mut types = Vec::with_capacity(vec.len());
+                    vec.iter().enumerate().for_each(|(i, v)| match v {
+                        Value::Object(_) => {
+                            let ps = common::vec_clone_and_pushs(
+                                of_val.paths(),
+                                [VPath::Index(i), VPath::Key("type".to_string())],
+                            );
+                            let t =
+                                VPPaths::new(&ps)
+                                    .value(ctx.basics.as_ref())
+                                    .unwrap_or_else(|| {
+                                        panic!("error: {}/{} not type, {:?}", val.path(), of, otd)
+                                    });
+                            types.push(t.as_str().unwrap().to_string());
+                        }
+                        _ => panic!("error: {}/{} not an object, {:?}", val.path(), of, otd),
+                    });
+                    return Some(types.join(","));
+                }
+                _ => panic!("error: {}.{} not an array, {:?}", otd.args[0].0, of, otd),
+            }
+        }
+    }
+
+    None
+}
+
 pub fn osa3type(
     ctx: Context,
     otd: &Otd,
@@ -280,58 +312,12 @@ pub fn osa3type(
         }
     }
 
-    if let Some(aval) = val.str_get("anyOf") {
-        if let Some(v) = aval.ref_value() {
-            match v {
-                Value::Array(vec) => {
-                    let mut of_types = Vec::with_capacity(vec.len());
-                    vec.iter().enumerate().for_each(|(i, v)| match v {
-                        Value::Object(_) => {
-                            let nps = common::vec_clone_and_pushs(
-                                aval.paths(),
-                                [VPath::Index(i), VPath::Key("type".to_string())],
-                            );
-                            let t = VPPaths::new(&nps)
-                                .value(ctx.basics.as_ref())
-                                .unwrap_or_else(|| {
-                                    panic!("error: {} anyOf not type, {:?}", val.path(), otd)
-                                });
-                            of_types.push(t.as_str().unwrap());
-                        }
-                        _ => panic!("error: {} anyOf not an object, {:?}", val.path(), otd),
-                    });
-                    print!("or[{}]", of_types.join(","));
-                }
-                _ => panic!("error: {}.anyOf not an array, {:?}", otd.args[0].0, otd),
-            }
-        }
+    if let Some(anyof) = xxxof(&ctx, otd, &val, "anyOf") {
+        print!("or[{}]", anyof);
     }
 
-    if let Some(aval) = val.str_get("allOf") {
-        if let Some(v) = aval.ref_value() {
-            match v {
-                Value::Array(vec) => {
-                    let mut of_types = Vec::with_capacity(vec.len());
-                    vec.iter().enumerate().for_each(|(i, v)| match v {
-                        Value::Object(_) => {
-                            let nps = common::vec_clone_and_pushs(
-                                aval.paths(),
-                                [VPath::Index(i), VPath::Key("type".to_string())],
-                            );
-                            let t = VPPaths::new(&nps)
-                                .value(ctx.basics.as_ref())
-                                .unwrap_or_else(|| {
-                                    panic!("error: {} allOf, item not type, {:?}", val.path(), otd)
-                                });
-                            of_types.push(t.as_str().unwrap());
-                        }
-                        _ => panic!("error: {} allOf not an object, {:?}", val.path(), otd),
-                    });
-                    print!("all[{}]", of_types.join(","));
-                }
-                _ => panic!("error: {}.allOf not an array, {:?}", otd.args[0].0, otd),
-            }
-        }
+    if let Some(allof) = xxxof(&ctx, otd, &val, "allOf") {
+        print!("all[{}]", allof);
     }
 
     if otd.is_line {
