@@ -59,6 +59,7 @@ enum OtdState {
     Cond(Otd),
     NCond(Otd),
     CondNext(Otd),
+    String(String, Box<Self>),
     Block(Otd, Box<Self>),
     BlockEnd,
 }
@@ -210,6 +211,10 @@ impl OtdState {
                     return Self::NCond(otd);
                 }
 
+                if c == '"' {
+                    return Self::String(String::new(), Box::new(Self::Cond(otd)));
+                };
+
                 if c == ',' {
                     otd.args
                         .last_mut()
@@ -254,6 +259,10 @@ impl OtdState {
                 if c == '}' {
                     return Self::CondNext(otd).push(otds, ' ', row, col, c_is_end);
                 }
+
+                if c == '"' {
+                    return Self::String(String::new(), Box::new(Self::NCond(otd)));
+                };
 
                 if c == ',' {
                     otd.args
@@ -313,6 +322,28 @@ impl OtdState {
                 }
 
                 return Self::Args(otd);
+            }
+            Self::String(mut s, otd) => {
+                if c == '"' {
+                    match *otd {
+                        OtdState::Cond(mut otd) => {
+                            let conds = otd.args.last_mut().unwrap().1.as_mut().unwrap();
+                            conds.last_mut().unwrap().push_str(&s);
+                            conds.push(String::new());
+                            return Self::Cond(otd);
+                        }
+                        OtdState::NCond(mut otd) => {
+                            let nconds = otd.args.last_mut().unwrap().2.as_mut().unwrap();
+                            nconds.last_mut().unwrap().push_str(&s);
+                            nconds.push(String::new());
+                            return Self::NCond(otd);
+                        }
+                        _ => panic!("error: the otd state is not supported!"),
+                    }
+                }
+
+                s.push(c);
+                Self::String(s, otd)
             }
             Self::Block(mut otd, sub_state) => {
                 let sub_state = sub_state.push(otd.spac.as_mut().unwrap(), c, row, col, c_is_end);

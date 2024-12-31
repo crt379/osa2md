@@ -1,5 +1,4 @@
-$go(paths, paths);
-$for(paths, path{/Orders}, pathobj)`path`:
+$for(paths, path{"/Products({ProductID})/Category"}, pathobj)`path`:
 # $get(path);
 
 $for(pathobj, method{!parameters}, methodobj)`method`:
@@ -23,6 +22,19 @@ $(`param`);
 
 |参数名|类型|必填|说明|
 |----|----|----|----|
+$tryfor(methodobj.requestBody.content, mediaType{application/json}, mediaTypeobj)`mediaType`:
+$for(mediaTypeobj.schema.properties, item, itemobj, itemrefs)`item`:
+|$get(item);|$osa3type(itemobj);|$tryget(itemobj.required, false);|$tryget(itemobj.description, none);|
+$()`item`;
+$()`mediaType`;
+
+$recurs():
+<details>
+<summary>占用</summary>
+占用
+
+</details>
+$()`detail`;
 
 ### responses
 
@@ -31,10 +43,9 @@ $for(methodobj.responses, code{!4XX}, responseobj)`code`:
 
 $tryget(responseobj.description);
 
-$go(responseobj.content, contentobj);
 |参数名|类型|必填|说明|
 |-----|-----|-----|-----|
-$for(contentobj, mediaType{application/json}, mediaTypeobj)`mediaType`:
+$for(responseobj.content, mediaType{application/json}, mediaTypeobj)`mediaType`:
 $for(mediaTypeobj.schema.properties, item, itemobj)`item`:
 |$get(item);|$osa3type(itemobj);|$tryget(itemobj.required, false);|$tryget(itemobj.description, none);|
 $()`item`;
