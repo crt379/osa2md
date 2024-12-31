@@ -2,8 +2,6 @@ use std::rc::Rc;
 
 use serde_json::Value;
 
-use crate::common::common;
-
 use super::context::{Context, CtxValue, VPPaths, VPath};
 use super::exec::IFunc;
 use super::otd::Otd;
@@ -230,7 +228,7 @@ pub fn tryfor(ctx: Context, otd: &Otd, funcmanage: &dyn IFunc) -> Option<(String
     for_base(ctx, otd, funcmanage, true)
 }
 
-fn xxxof(ctx: &Context, otd: &Otd, val: &Rc<CtxValue>, of: &str) -> Option<String> {
+fn xxxof(_: &Context, otd: &Otd, val: &Rc<CtxValue>, of: &str) -> Option<String> {
     if let Some(of_val) = val.str_get(of) {
         if let Some(v) = of_val.ref_value() {
             match v {
@@ -238,17 +236,19 @@ fn xxxof(ctx: &Context, otd: &Otd, val: &Rc<CtxValue>, of: &str) -> Option<Strin
                     let mut types = Vec::with_capacity(vec.len());
                     vec.iter().enumerate().for_each(|(i, v)| match v {
                         Value::Object(_) => {
-                            let ps = common::vec_clone_and_pushs(
-                                of_val.paths(),
-                                [VPath::Index(i), VPath::Key("type".to_string())],
-                            );
-                            let t =
-                                VPPaths::new(&ps)
-                                    .value(ctx.basics.as_ref())
-                                    .unwrap_or_else(|| {
-                                        panic!("error: {}/{} not type, {:?}", val.path(), of, otd)
-                                    });
-                            types.push(t.as_str().unwrap().to_string());
+                            let item = of_val.index_get(i).unwrap();
+                            let item_type_str =
+                                item.str_get_value("type").unwrap().as_str().unwrap();
+                            match item_type_str {
+                                "object" => {
+                                    if let Some(title) = item.str_get_value("title") {
+                                        types.push(title.as_str().unwrap().to_string());
+                                    } else {
+                                        types.push(item_type_str.to_string())
+                                    }
+                                }
+                                _ => types.push(item_type_str.to_string()),
+                            }
                         }
                         _ => panic!("error: {}/{} not an object, {:?}", val.path(), of, otd),
                     });

@@ -104,6 +104,10 @@ impl CtxValue {
                             }
                         }
                     }
+                    Value::Array(arr) => common::parse_index(k).and_then(|i| {
+                        npaths.push(VPath::Index(i));
+                        arr.get(i)
+                    }),
                     _ => None,
                 })
                 .map(|_| Self::Basics(npaths, value.clone()))
@@ -113,6 +117,10 @@ impl CtxValue {
 
     pub fn str_get(&self, key: &str) -> Option<Self> {
         self.get([key].iter().cloned())
+    }
+
+    pub fn index_get(&self, index: usize) -> Option<Self> {
+        self.get([index.to_string().as_str()].iter().cloned())
     }
 
     pub fn str_get_value(&self, key: &str) -> Option<&Value> {
