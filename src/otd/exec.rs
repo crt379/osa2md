@@ -7,11 +7,17 @@ use super::{
     otd::Otd,
 };
 
+pub enum RunState {
+    Break,
+    Continue,
+    Variable(String, Rc<CtxValue>),
+    Return,
+    None,
+}
+
 pub trait IFunc {
-    fn get(
-        &self,
-        name: &str,
-    ) -> Option<fn(ctx: Context, otd: &Otd, ifunc: &dyn IFunc) -> Option<(String, Rc<CtxValue>)>>;
+    fn get(&self, name: &str)
+        -> Option<fn(ctx: Context, otd: &Otd, ifunc: &dyn IFunc) -> RunState>;
 }
 
 pub struct Exec {
@@ -31,10 +37,9 @@ impl Exec {
 
     pub fn run(&mut self) {
         for otd in self.otds.iter() {
-            let ctx = self.ctx.son();
-            if let Some((n, v)) = self.ifunc.get(&otd.func).unwrap()(ctx, otd, self.ifunc.as_ref())
-            {
-                self.ctx.insert(n, v);
+            match self.ifunc.get(&otd.func).unwrap()(self.ctx.son(), otd, self.ifunc.as_ref()) {
+                RunState::Variable(n, v) => self.ctx.insert(n, v),
+                _ => {}
             }
         }
     }

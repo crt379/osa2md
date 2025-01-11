@@ -1,4 +1,4 @@
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Otd {
     pub func: String,
     // arg, conds, nconds
