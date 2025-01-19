@@ -68,7 +68,7 @@ pub fn go(ctx: Context, otd: &Otd, _: &dyn IFunc) -> RunState {
     );
 
     if let Some(val) = ctx.get(&otd.args[0].0.replace(".", "/")) {
-        return RunState::Variable(otd.args[1].0.to_string(), val);
+        return RunState::Variables(vec![(otd.args[1].0.to_string(), val)]);
     }
 
     panic!("error: not found {}, {:?}", otd.args[0].0, otd);
@@ -146,21 +146,26 @@ fn for_by_basics(ctx: Context, otd: &Otd, funcmanage: &dyn IFunc, vps: &Vec<VPat
                     forctx.insert(otd.args[1].0.to_string(), Rc::new(item.clone()));
                     for so in otd.spac.as_ref().unwrap() {
                         match funcmanage.get(&so.func).unwrap()(forctx.clone(), so, funcmanage) {
-                            RunState::Variable(n, v) => {
-                                if otd.args.len() >= 3 && otd.args[2].0 == n {
-                                    ctx.insert(n, v);
-                                } else {
-                                    forctx.insert(n, v);
+                            RunState::Variables(vec) => {
+                                for (n, v) in vec {
+                                    if otd.args.len() >= 3 && otd.args[2..].iter().any(|a| a.0 == n)
+                                    {
+                                        ctx.insert(n, v);
+                                    } else {
+                                        forctx.insert(n, v);
+                                    }
                                 }
                             }
                             RunState::Break | RunState::Return => {
                                 if otd.args.len() >= 3 {
-                                    if let Some(sobjs) = ctx.locals_get(&otd.args[2].0) {
-                                        return RunState::Variable(
-                                            otd.args[2].0.to_string(),
-                                            sobjs,
-                                        );
+                                    let mut ret = Vec::new();
+                                    for (n, _, _) in &otd.args[2..] {
+                                        if let Some(sobjs) = ctx.locals_get(n) {
+                                            ret.push((n.clone(), sobjs));
+                                        }
                                     }
+
+                                    return RunState::Variables(ret);
                                 }
                                 return RunState::Return;
                             }
@@ -171,9 +176,14 @@ fn for_by_basics(ctx: Context, otd: &Otd, funcmanage: &dyn IFunc, vps: &Vec<VPat
                 }
 
                 if otd.args.len() >= 3 {
-                    if let Some(sobjs) = ctx.locals_get(&otd.args[2].0) {
-                        return RunState::Variable(otd.args[2].0.to_string(), sobjs);
+                    let mut ret = Vec::new();
+                    for (n, _, _) in &otd.args[2..] {
+                        if let Some(sobjs) = ctx.locals_get(n) {
+                            ret.push((n.clone(), sobjs));
+                        }
                     }
+
+                    return RunState::Variables(ret);
                 }
 
                 return RunState::None;
@@ -205,21 +215,26 @@ fn for_by_basics(ctx: Context, otd: &Otd, funcmanage: &dyn IFunc, vps: &Vec<VPat
 
                     for so in otd.spac.as_ref().unwrap() {
                         match funcmanage.get(&so.func).unwrap()(forctx.clone(), so, funcmanage) {
-                            RunState::Variable(n, v) => {
-                                if otd.args.len() >= 4 && otd.args[3].0 == n {
-                                    ctx.insert(n, v);
-                                } else {
-                                    forctx.insert(n, v);
+                            RunState::Variables(vec) => {
+                                for (n, v) in vec {
+                                    if otd.args.len() >= 4 && otd.args[3..].iter().any(|a| a.0 == n)
+                                    {
+                                        ctx.insert(n, v);
+                                    } else {
+                                        forctx.insert(n, v);
+                                    }
                                 }
                             }
                             RunState::Break | RunState::Return => {
                                 if otd.args.len() >= 4 {
-                                    if let Some(sobjs) = ctx.locals_get(&otd.args[3].0) {
-                                        return RunState::Variable(
-                                            otd.args[3].0.to_string(),
-                                            sobjs,
-                                        );
+                                    let mut ret = Vec::new();
+                                    for (n, _, _) in &otd.args[3..] {
+                                        if let Some(sobjs) = ctx.locals_get(n) {
+                                            ret.push((n.clone(), sobjs));
+                                        }
                                     }
+
+                                    return RunState::Variables(ret);
                                 }
                                 return RunState::Return;
                             }
@@ -230,9 +245,14 @@ fn for_by_basics(ctx: Context, otd: &Otd, funcmanage: &dyn IFunc, vps: &Vec<VPat
                 }
 
                 if otd.args.len() >= 4 {
-                    if let Some(sobjs) = ctx.locals_get(&otd.args[3].0) {
-                        return RunState::Variable(otd.args[3].0.to_string(), sobjs);
+                    let mut ret = Vec::new();
+                    for (n, _, _) in &otd.args[3..] {
+                        if let Some(sobjs) = ctx.locals_get(n) {
+                            ret.push((n.clone(), sobjs));
+                        }
                     }
+
+                    return RunState::Variables(ret);
                 }
 
                 return RunState::None;
@@ -270,18 +290,25 @@ fn for_by_refobjs(
 
         for so in otd.spac.as_ref().unwrap() {
             match funcmanage.get(&so.func).unwrap()(forctx.clone(), so, funcmanage) {
-                RunState::Variable(n, v) => {
-                    if otd.args.len() >= 4 && otd.args[3].0 == n {
-                        ctx.insert(n, v);
-                    } else {
-                        forctx.insert(n, v);
+                RunState::Variables(vec) => {
+                    for (n, v) in vec {
+                        if otd.args.len() >= 4 && otd.args[3..].iter().any(|a| a.0 == n) {
+                            ctx.insert(n, v);
+                        } else {
+                            forctx.insert(n, v);
+                        }
                     }
                 }
                 RunState::Break | RunState::Return => {
                     if otd.args.len() >= 4 {
-                        if let Some(sobjs) = ctx.locals_get(&otd.args[3].0) {
-                            return RunState::Variable(otd.args[3].0.to_string(), sobjs);
+                        let mut ret = Vec::new();
+                        for (n, _, _) in &otd.args[3..] {
+                            if let Some(sobjs) = ctx.locals_get(n) {
+                                ret.push((n.clone(), sobjs));
+                            }
                         }
+
+                        return RunState::Variables(ret);
                     }
                     return RunState::Return;
                 }
@@ -292,9 +319,14 @@ fn for_by_refobjs(
     }
 
     if otd.args.len() >= 4 {
-        if let Some(sobjs) = ctx.locals_get(&otd.args[3].0) {
-            return RunState::Variable(otd.args[3].0.to_string(), sobjs);
+        let mut ret = Vec::new();
+        for (n, _, _) in &otd.args[3..] {
+            if let Some(sobjs) = ctx.locals_get(n) {
+                ret.push((n.clone(), sobjs));
+            }
         }
+
+        return RunState::Variables(ret);
     }
 
     RunState::None
@@ -591,7 +623,7 @@ pub fn osa3type(ctx: Context, otd: &Otd, _funcmanage: &dyn IFunc) -> RunState {
 
     if otd.args.len() >= 2 {
         if let Some(sobjs) = ctx.locals_get(&otd.args[1].0) {
-            return RunState::Variable(otd.args[1].0.clone(), sobjs);
+            return RunState::Variables(vec![(otd.args[1].0.clone(), sobjs)]);
         }
     }
 

@@ -18,10 +18,14 @@ A simple tool to convert OSA(openapi) files to Markdown.
 
 ### 内置函数：
 
-下列为内置函数，有些函数是做特殊处理的，不适用普通情况。
+下列为内置函数，有些函数是特殊需求特殊处理的，不适用于普通情况。
 
-函数特殊参数标注：1. 函数名前加 `+` 表示参数可选 2. `{}` 参照语言格式
+函数特殊参数标注：
+1. 函数名前 `+` 表示参数可选 
+2. `{}` 参照语言格式, 
+3. `...` 表示多个参数
 
+---
 
 - go(source, var): 进入某个 object; source 为路径, var 为后续这个使用这个object的名称。示例:
 ```
@@ -33,7 +37,7 @@ $go(paths, paths);
 $get(methodobj.summary);
 ```
 
-- for(source, key, +val, +retval)：循环某个 object/arrays; source 为对象名称, key 为后续使用key值的名称, val 则是val值的名称, retval 为返回的变量名。示例:
+- for(source, key, +val, +retval...)：循环某个 object/arrays; source 为对象名称, key 为后续使用key值的名称, val 则是val值的名称, retval 为返回的变量名。示例:
 ```
 |参数名|类型|必填|说明|
 |-----|----|----|----|
@@ -63,9 +67,9 @@ $continue();
 $()`exist`;
 ```
 
-- recurs(name, source, var)：递归的执行 `:` 后的命令, name 为递归的函数名称, source 为对象名称, var 为后续使用的对象名称。示例:
+- recurs(name, source, var)：递归, name 为递归的函数名称, source 为对象名称, var 为后续使用的对象名称也就是source改名为var, 来支持递归函数中的source的变动。示例:
 ```
-$recurs(recurs, objarr, arr)`ddd`:
+$recurs(recurs, objarr, arr)`recurs`:
 
 $for(arr, name, objref)`forobj`:
 $exist(already, name)`exist`:
@@ -85,7 +89,7 @@ $recurs(recurs, sobjarr, arr);
 </details>
 
 $()`forobj`;
-$()`ddd`;
+$()`recurs`;
 ```
 
 - debug(name): 输出调试信息, name 为要输出的调试信息。示例:
@@ -117,5 +121,5 @@ $osa3type(itemobj, objarr);
 ## Usage
 
 ```
-osa2md -i openapi3.md -d Northwind-V3.openapi3.json
+osa2md -i openapi3.md -d openapi3.json
 ```

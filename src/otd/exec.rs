@@ -10,7 +10,7 @@ use super::{
 pub enum RunState {
     Break,
     Continue,
-    Variable(String, Rc<CtxValue>),
+    Variables(Vec<(String, Rc<CtxValue>)>),
     Return,
     None,
 }
@@ -38,7 +38,11 @@ impl Exec {
     pub fn run(&mut self) {
         for otd in self.otds.iter() {
             match self.ifunc.get(&otd.func).unwrap()(self.ctx.son(), otd, self.ifunc.as_ref()) {
-                RunState::Variable(n, v) => self.ctx.insert(n, v),
+                RunState::Variables(vs) => {
+                    for (n, v) in vs {
+                        self.ctx.insert(n, v.clone());
+                    }
+                }
                 _ => {}
             }
         }
